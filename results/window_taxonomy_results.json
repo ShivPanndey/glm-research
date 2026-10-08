@@ -1,0 +1,98 @@
+[
+  {
+    "window_bp": 500,
+    "stride_bp": 250,
+    "n_reference": 29206,
+    "n_query": 29202,
+    "species_balanced_accuracy": 0.893864960518121,
+    "per_species_recall": {
+      "B. fragilis": 0.8999332888592395,
+      "C. diphtheriae": 0.9047715736040609,
+      "Ca. Portiera": 0.9845938375350141,
+      "E. coli": 0.8565278226240448,
+      "H. influenzae": 0.8234982799682455
+    },
+    "ecoli_strain_balanced_accuracy": 0.11092246633085269,
+    "chance_species": 0.2
+  },
+  {
+    "window_bp": 1000,
+    "stride_bp": 500,
+    "n_reference": 14599,
+    "n_query": 14595,
+    "species_balanced_accuracy": 0.9493869640958476,
+    "per_species_recall": {
+      "B. fragilis": 0.9588179218303146,
+      "C. diphtheriae": 0.9723801787164906,
+      "Ca. Portiera": 0.9971910112359551,
+      "E. coli": 0.914944013781223,
+      "H. influenzae": 0.9036016949152542
+    },
+    "ecoli_strain_balanced_accuracy": 0.1123492678725237,
+    "chance_species": 0.2
+  },
+  {
+    "window_bp": 2000,
+    "stride_bp": 1000,
+    "n_reference": 7296,
+    "n_query": 7291,
+    "species_balanced_accuracy": 0.9763585226073896,
+    "per_species_recall": {
+      "B. fragilis": 0.9843511450381679,
+      "C. diphtheriae": 0.9959349593495935,
+      "Ca. Portiera": 1.0,
+      "E. coli": 0.9534683326152521,
+      "H. influenzae": 0.9480381760339343
+    },
+    "ecoli_strain_balanced_accuracy": 0.10505052995145994,
+    "chance_species": 0.2
+  },
+  {
+    "window_bp": 5000,
+    "stride_bp": 2500,
+    "n_reference": 2913,
+    "n_query": 2910,
+    "species_balanced_accuracy": 0.9900816278453636,
+    "per_species_recall": {
+      "B. fragilis": 0.994263862332696,
+      "C. diphtheriae": 1.0,
+      "Ca. Portiera": 1.0,
+      "E. coli": 0.982740021574973,
+      "H. influenzae": 0.973404255319149
+    },
+    "ecoli_strain_balanced_accuracy": 0.10447657290211468,
+    "chance_species": 0.2
+  },
+  {
+    "window_bp": 10000,
+    "stride_bp": 5000,
+    "n_reference": 1452,
+    "n_query": 1449,
+    "species_balanced_accuracy": 0.9972507077958198,
+    "per_species_recall": {
+      "B. fragilis": 0.9980806142034548,
+      "C. diphtheriae": 1.0,
+      "Ca. Portiera": 1.0,
+      "E. coli": 0.9935205183585313,
+      "H. influenzae": 0.9946524064171123
+    },
+    "ecoli_strain_balanced_accuracy": 0.10627523711146586,
+    "chance_species": 0.2
+  },
+  {
+    "window_bp": 20000,
+    "stride_bp": 10000,
+    "n_reference": 721,
+    "n_query": 719,
+    "species_balanced_accuracy": 1.0,
+    "per_species_recall": {
+      "B. fragilis": 1.0,
+      "C. diphtheriae": 1.0,
+      "Ca. Portiera": 1.0,
+      "E. coli": 1.0,
+      "H. influenzae": 1.0
+    },
+    "ecoli_strain_balanced_accuracy": 0.10244921207518512,
+    "chance_species": 0.2
+  }
+]

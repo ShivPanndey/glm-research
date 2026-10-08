@@ -1,0 +1,10 @@
+{
+ "ecoli_EC590": {
+  "median_best_hit_cosine": 0.8800166249275208,
+  "syntenic_fraction": 0.9316101238556812
+ },
+ "haemophilus_influenzae": {
+  "median_best_hit_cosine": 0.6391271352767944,
+  "syntenic_fraction": 0.12493268712977922
+ }
+}
