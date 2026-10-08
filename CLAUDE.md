@@ -44,33 +44,53 @@ transfer their KOs by similarity-weighted vote.
 ## Data
 
 - **Location:** UGA SharePoint site `DUTTA-LAB-Ashutosh-project`, folder `Data_for_Shivank`,
-  single file `family_1000_dataset.tar.gz` (1.35 GB compressed, uploaded 2026-09-22).
-  **Contents not yet inspected.** Plan: move it to Sapelo2 scratch.
-- **Known conventions from earlier samples:**
-  - Genomes are multi-contig `.fa` files. Example: `2013515001_1_genome.fa`, a Yellowstone
-    (YNP8) Crenarchaeota MAG, 81 contigs, 1.81 Mb, GC 32%.
-  - Labels are eggNOG-mapper `.emapper.annotations` TSVs, 21 columns, **KEGG_ko in column
-    12**, values like `ko:K00001,ko:K00002` or `-`. Produced with emapper 2.1.9 (diamond
-    mode) from Prodigal `.faa` on a SLURM cluster (original paths under `/scratch/ak03777/`,
-    directory `all_dereplicated_genomes`).
-  - The annotation files name each ORF (for example `contig7_12`, the 12th gene on
-    contig7) but carry **no genome coordinates**. Prodigal `.faa` headers or `.gff` files
-    supply coordinates. Without them, window-level labels cannot be built.
-- **Open data request (blocking window-level work):** Prodigal `.faa` or `.gff` files, if
-  not already inside the tarball.
+  single file `family_1000_dataset.tar.gz` (1,351,413,479 bytes, uploaded 2026-09-22). Some
+  browsers (Safari) auto-decompress it to a plain `.tar`; that is the same data.
+  Plan: move it to Sapelo2 scratch.
 
-### First thing to do with the tarball
+### Dataset structure (inspected 2026-10-08 with `peek_dataset.py`)
 
-```bash
-# Inventory and a small matched sample, without full extraction:
-python scripts/peek_dataset.py family_1000_dataset.tar.gz --n 20
-# -> dataset_summary.txt and dataset_sample.zip next to the archive
+Re-inspect without full extraction (.tar or .tar.gz): `python scripts/peek_dataset.py
+family_1000_dataset.tar --n 20` writes `dataset_summary.txt` and `dataset_sample.zip` next
+to the archive (both gitignored; lab data stays off GitHub).
+
+```
+family_1000_dataset_final_v2/            4,013 files, 4.60 GB uncompressed
+  genomes/<id>.fa                        1,000 genomes, flat folder, 422 KB to 12.5 MB (median 2.55 MB)
+  eggnog/<id>/<id>.emapper.annotations   labels (KEGG_ko is column 12)
+  eggnog/<id>/<id>.emapper.seed_orthologs, .emapper.hits   intermediate emapper outputs
+  logs/                                  12 assembly logs (see below)
 ```
 
-Then check `tnf_retrieval` file matching: `scripts/run_baseline.py::norm_id` matches
-genome and annotation files on the name up to the first `.`, minus a trailing
-`_genome`, `_proteins`, or `_genes`. **Adapt `norm_id` to the real naming scheme** and
-confirm the "unmatched" count printed by `evaluate` is near zero.
+- All 1,000 genome ids have a matching annotation; 0 unmatched.
+- Id families seen: `GCMeta_NNNNNNNN`, `spire_mag_NNNNNNNN`, `specI_v4_NNNNN`, IMG-style
+  `3300017444_117`, and NCBI assemblies such as `GCF_003590795.1_ASM359079v1_genomic` (dots
+  inside the id, so `norm_id` strips known suffixes instead of splitting at the first `.`).
+- Contig headers vary by source: `GCMeta_01254050_00001`, `k141_126446`,
+  `3300017444.a:Ga0185300_10004342`, `NODE_26_length_263618_cov_24.617230`.
+- Annotation query ids are Prodigal style, `<contig>_<n>` = n-th gene on that contig.
+  Only genes with an emapper hit get a row. Produced by emapper 2.1.9, diamond mode, from
+  `chunk_*/<id>.faa` on Sapelo2 (`/scratch/ak03777/objective2/analysis/eggnog/...`).
+- **No Prodigal `.faa` or `.gff` in the tarball.** Workaround: `scripts/call_genes.py`
+  re-calls genes with pyrodigal in single-genome mode (Prodigal's default). On the 20-genome
+  sample this reproduced 100% of annotated gene ids in every genome, with no annotated index
+  beyond the predicted gene count; metagenome mode did not (95 to 99.8%). Id agreement does
+  not yet prove identical coordinates: still to check that `.seed_orthologs` alignment ends
+  (qend) fit inside the re-called protein lengths.
+- **Logs to read before evaluating:** `selected_1000_names.txt`, `retained_995_names.txt`,
+  `replacement_5_names.txt`, `final_genome_names.txt`, `copy_failures.tsv`, plus
+  metadata/eggnog/fasta id lists. Suggests 5 of the original 1,000 picks were replaced. A
+  metadata table (taxonomy?) was used but is not in the tarball.
+- **Open question for the advisors:** does "family_1000" mean one genome per taxonomic
+  family? If so, no test genome has a close relative in the reference set, which is the
+  hardest case for retrieval (see results below), and the evaluation should say so.
+
+### Matching files
+
+`scripts/run_baseline.py::norm_id` matches files on the name minus its known suffix
+(`.fa`, `.faa`, `.emapper.annotations`, ...) and a trailing `_genome`, `_proteins`, or
+`_genes`. `--annotations` and `--faa` are searched recursively, so point `--annotations`
+at `eggnog/`. Checked on the 20-genome sample: "0 unmatched".
 
 ## Compute
 
@@ -88,6 +108,7 @@ tnf/retrieval.py      TNFIndex (CLR -> z-score -> L2 -> FAISS IndexFlatIP),
                       softmax similarity vote, genome-level and window-level transfer
 tnf/evaluate.py       micro/macro P/R/F1, threshold tuning, genome clustering, grouped splits
 scripts/run_baseline.py         `featurize` (SLURM-array aware) and `evaluate` subcommands
+scripts/call_genes.py           re-creates Prodigal .faa (pyrodigal, single mode), checks ids vs emapper
 scripts/featurize_array.sbatch  Sapelo2 array template
 scripts/peek_dataset.py         inventory + sample extraction from the lab tarball
 experiments/window_taxonomy.py  public-genome sanity check, figs 1 to 4
@@ -145,18 +166,21 @@ is the reference, second half the queries.
 
 ## Next steps (in order)
 
-1. Inspect the tarball (`peek_dataset.py`), record its real structure in this file, adapt
-   `norm_id`.
-2. Run `run_baseline.py evaluate` on a sample of lab genomes: first real KEGG_ko numbers,
-   TNF genome-kNN versus frequency prior.
-3. Compute ANI clusters (skani or fastANI) for proper splits; rerun.
-4. If `.faa`/`.gff` are available: window-level traversal; sweep window size (1, 2, 5,
+1. Done: tarball inspected, structure recorded above, `norm_id` adapted, `call_genes.py`
+   added. Pipeline runs end to end on the 20-genome sample (too few genomes for numbers).
+   Note: the sample is the 20 smallest genomes (0.42 to 0.64 MB), not representative.
+2. Read the logs; confirm with the advisors what "family_1000" means. Verify re-called
+   coordinates against `.seed_orthologs` qend.
+3. On Sapelo2: `call_genes.py` and `featurize` as array jobs over all 1,000 genomes, then
+   `evaluate`: first real KEGG_ko numbers, TNF genome-kNN versus frequency prior.
+4. Compute ANI clusters (skani or fastANI) for proper splits; rerun.
+5. Window-level traversal; sweep window size (1, 2, 5,
    10 kb) and k; isotonic calibration of window probabilities.
-5. OOD plot: per-genome F1 versus nearest-training-genome cosine (data already written to
+6. OOD plot: per-genome F1 versus nearest-training-genome cosine (data already written to
    `baseline_report.json` under `ood_test_genomes`).
-6. Hubness mitigation for window retrieval (CSLS or similar); compare.
-7. Break results out by carbon, nitrogen, sulfur, and metal-cycling KO subsets.
-8. Hybrid hook: retrieved KOs as prior or context for the GLM.
+7. Hubness mitigation for window retrieval (CSLS or similar); compare.
+8. Break results out by carbon, nitrogen, sulfur, and metal-cycling KO subsets.
+9. Hybrid hook: retrieved KOs as prior or context for the GLM.
 
 Original 15-week plan (from Sept 24): weeks 1 to 2 data and labels; 3 to 4 featurizer
 (done); 5 to 6 genome-level baseline (code done, needs lab data); 7 to 9 window traversal
@@ -175,8 +199,9 @@ python tests/make_smoke_data.py /tmp/smoke
 python scripts/run_baseline.py featurize --genomes /tmp/smoke/genomes --out /tmp/smoke/cache --window 5000 --stride 2500
 python scripts/run_baseline.py evaluate --cache /tmp/smoke/cache --annotations /tmp/smoke/ann --faa /tmp/smoke/faa --out /tmp/smoke/results
 
-# real data on Sapelo2
+# real data on Sapelo2 ($DATA = family_1000_dataset_final_v2)
+python scripts/call_genes.py --genomes $DATA/genomes --annotations $DATA/eggnog --out $DATA/prodigal
 sbatch scripts/featurize_array.sbatch
 python scripts/run_baseline.py evaluate --cache /scratch/$USER/glm/tnf_cache_w5k \
-  --annotations $DATA/annotations --faa $DATA/prodigal --clusters clusters_ani95.tsv --out results/
+  --annotations $DATA/eggnog --faa $DATA/prodigal --clusters clusters_ani95.tsv --out results/
 ```

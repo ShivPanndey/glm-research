@@ -8,8 +8,11 @@ Step 2 (single job):
   python scripts/run_baseline.py evaluate --cache cache/ --annotations DIR [--faa DIR]
          [--clusters clusters.tsv] --out results/
 
-Genome <-> annotation files are matched on a normalized id: the file name up to
-the first '.', with a trailing '_genome', '_proteins' or '_genes' removed.
+Genome <-> annotation files are matched on a normalized id: the file name minus its
+known suffix (.fa/.fna/.fasta, .emapper.annotations, .faa, .gff, optionally .gz), with a
+trailing '_genome', '_proteins' or '_genes' removed. Dots inside the id are kept
+(GCF_003590795.1_ASM359079v1_genomic). --annotations and --faa are searched recursively,
+so the lab layout eggnog/<id>/<id>.emapper.annotations works as is.
 """
 from __future__ import annotations
 
@@ -31,8 +34,11 @@ from tnf import (KOVocab, TNFIndex, best_threshold, clr, cluster_genomes, featur
 FASTA_RE = re.compile(r"\.(fa|fna|fasta)(\.gz)?$")
 
 
+SUFFIX_RE = re.compile(r"\.(fa|fna|fasta|faa|gff3?|emapper\.annotations)(\.gz)?$")
+
+
 def norm_id(p: Path) -> str:
-    return re.sub(r"_(genome|proteins|genes)$", "", p.name.split(".")[0])
+    return re.sub(r"_(genome|proteins|genes)$", "", SUFFIX_RE.sub("", Path(p).name))
 
 
 # ------------------------------------------------------------------ featurize
@@ -61,7 +67,7 @@ def cmd_featurize(a):
 # ------------------------------------------------------------------- evaluate
 def load_labels(ann_dir: Path):
     out = {}
-    for p in sorted(ann_dir.glob("*.emapper.annotations*")):
+    for p in sorted(ann_dir.rglob("*.emapper.annotations*")):
         out[norm_id(p)] = parse_emapper(p)
     return out
 
@@ -139,7 +145,7 @@ def cmd_evaluate(a):
 
     # ---- window-level traversal (needs Prodigal coordinates)
     if a.faa:
-        faa = {norm_id(p): p for p in Path(a.faa).iterdir() if ".faa" in p.name}
+        faa = {norm_id(p): p for p in Path(a.faa).rglob("*.faa*")}
         win_ids = [i for i in range(len(ids)) if ids[i] in faa and "counts" in np.load(cache[ids[i]])]
         if win_ids:
             W = {}

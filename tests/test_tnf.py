@@ -73,3 +73,15 @@ def test_grouped_split_no_leakage_and_balanced():
     assert set(groups[tr]).isdisjoint(groups[va]) and set(groups[tr]).isdisjoint(groups[te])
     assert set(groups[va]).isdisjoint(groups[te])
     assert len(te) >= 8 and len(va) >= 8 and len(tr) + len(va) + len(te) == 96
+
+def test_norm_id_lab_names():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from run_baseline import norm_id
+    gcf = "GCF_003590795.1_ASM359079v1_genomic"
+    assert norm_id(Path(f"genomes/{gcf}.fa")) == norm_id(Path(f"eggnog/{gcf}/{gcf}.emapper.annotations")) == gcf
+    assert norm_id(Path("GCF_003590795.2_x_genomic.fa")) != norm_id(Path(f"{gcf}.fa"))  # versions stay distinct
+    assert norm_id(Path("spire_mag_00040168.fa")) == norm_id(Path("spire_mag_00040168.faa")) == "spire_mag_00040168"
+    assert norm_id(Path("2013515001_1_genome.fa")) == norm_id(Path("2013515001_1.emapper.annotations"))
+    assert norm_id(Path("x_proteins.faa.gz")) == "x"

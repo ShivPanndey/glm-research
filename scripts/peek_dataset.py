@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize family_1000_dataset.tar.gz and pull a small, matched sample.
+"""Summarize family_1000_dataset.tar.gz (or the plain .tar a browser leaves) and pull a small, matched sample.
 
 Usage (Python 3.8+, no extra packages):
     python peek_dataset.py family_1000_dataset.tar.gz            # default 20 genomes
@@ -67,7 +67,7 @@ def main():
 
     # ---------------- pass 1: inventory
     files = []  # (name, size)
-    with tarfile.open(arc, "r|gz") as tf:
+    with tarfile.open(arc, "r|*") as tf:
         for m in tf:
             if m.isfile():
                 files.append((m.name, m.size))
@@ -113,7 +113,7 @@ def main():
     # ---------------- pass 2: extract sample + previews
     previews = {}
     zpath = out_dir / "dataset_sample.zip"
-    with tarfile.open(arc, "r|gz") as tf, zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as zf:
+    with tarfile.open(arc, "r|*") as tf, zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as zf:
         for m in tf:
             if not m.isfile() or (m.name not in want and m.name not in want_preview):
                 continue
