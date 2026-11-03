@@ -13,6 +13,9 @@ Context file for Claude Code. Read this fully before doing anything in this repo
 - Never report a number you did not actually compute in this repo. Mark public-data
   results as sanity checks, not project results.
 - I want project progress to be based on the **lab's own data**, not public genomes.
+- **I am a visual, diagram-first person.** When planning, explaining, or asking me to approve
+  a design, lead with diagrams (flow charts, maps of where code and data live, before/after
+  pictures), then short text. Keep a running visual plan page updated as we discuss.
 
 ## Project
 
