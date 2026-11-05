@@ -7,3 +7,6 @@ __pycache__/
 dataset_sample.zip
 dataset_summary.txt
 /lab_data/
+
+# executor scratch (plan ledgers)
+.superpowers/

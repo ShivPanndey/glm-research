@@ -13,7 +13,6 @@ Nothing else is extracted. Two streaming passes over the archive (a few minutes)
 """
 import argparse
 import collections
-import io
 import re
 import tarfile
 import zipfile

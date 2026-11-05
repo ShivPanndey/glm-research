@@ -5,7 +5,7 @@ Each real genome is cut into 8 pseudo-MAGs; genes are called with Prodigal
 of each protein's first 25 aa), so any scores from this data are meaningless.
 It only checks that featurize -> split -> retrieve -> evaluate runs end to end.
 """
-import gzip, hashlib, sys
+import hashlib, sys
 from pathlib import Path
 import pyrodigal
 ROOT = Path(__file__).resolve().parents[1]; sys.path.insert(0, str(ROOT))
