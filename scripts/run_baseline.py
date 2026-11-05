@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -26,6 +25,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from jobutil import FailureLog, my_shard, task_count, task_id  # noqa: E402
 from tnf import (KOVocab, TNFIndex, best_threshold, clr, cluster_genomes, featurize_genome,  # noqa: E402
                  genome_ko_set, grouped_split, multilabel_metrics, parse_emapper,
                  parse_prodigal_faa, transfer_genome_level, transfer_window_level,
@@ -44,24 +44,31 @@ def norm_id(p: Path) -> str:
 # ------------------------------------------------------------------ featurize
 def cmd_featurize(a):
     files = sorted(p for p in Path(a.genomes).iterdir() if FASTA_RE.search(p.name))
-    task = int(os.environ.get("SLURM_ARRAY_TASK_ID", 0))
-    n_tasks = int(os.environ.get("SLURM_ARRAY_TASK_COUNT", 1))
-    mine = files[task::n_tasks]
+    mine = my_shard(files)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    for f in mine:
-        gid = norm_id(f)
-        dest = out / f"{gid}.npz"
-        if dest.exists() and not a.overwrite:
-            continue
-        total, tab = featurize_genome(f, a.window, a.stride, genome_id=gid)
-        if tab is None:
-            np.savez_compressed(dest, total=total)
-        else:
-            np.savez_compressed(dest, total=total, contigs=tab.contigs.astype(str),
-                                starts=tab.starts, ends=tab.ends,
-                                counts=tab.counts.astype(np.uint16))
-    print(f"task {task}/{n_tasks}: featurized {len(mine)} genomes -> {out}")
+    with FailureLog(out) as log:
+        for f in mine:
+            gid = norm_id(f)
+            dest = out / f"{gid}.npz"
+            if dest.exists() and not a.overwrite:
+                continue
+            try:
+                total, tab = featurize_genome(f, a.window, a.stride, genome_id=gid)
+                if total.sum() == 0:
+                    raise ValueError("no sequence")
+                if tab is None:
+                    np.savez_compressed(dest, total=total)
+                else:
+                    np.savez_compressed(dest, total=total, contigs=tab.contigs.astype(str),
+                                        starts=tab.starts, ends=tab.ends,
+                                        counts=tab.counts.astype(np.uint16))
+            except Exception as e:  # one bad genome must not stop the other 999
+                log.record(gid, f"{type(e).__name__}: {e}")
+    print(f"task {task_id()}/{task_count()}: featurized {len(mine)} genomes -> {out}"
+          + (f"; {log.count} failed, see {log.path.name}" if log.count else ""))
+    if log.count:
+        sys.exit(1)
 
 
 # ------------------------------------------------------------------- evaluate
