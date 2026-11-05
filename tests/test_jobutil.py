@@ -65,3 +65,20 @@ def test_call_genes_id_failure_survives_rerun(tmp_path):
         assert run.returncode == 1, run.stdout + run.stderr
         assert (out / "failures.task0.tsv").read_text().startswith("g\tids: 1/1")
         assert not (out / "g.faa").exists() and (out / "g.faa.failed").exists()
+
+
+def test_atomic_write_leaves_nothing_on_crash(tmp_path):
+    from jobutil import atomic_write
+    dest = tmp_path / "g.faa"
+
+    def crash(fh):
+        fh.write("partial")
+        raise RuntimeError("killed mid-write")
+
+    try:
+        atomic_write(dest, crash)
+    except RuntimeError:
+        pass
+    assert not dest.exists() and list(tmp_path.iterdir()) == []
+    atomic_write(dest, lambda fh: fh.write("ok"))
+    assert dest.read_text() == "ok"

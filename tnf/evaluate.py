@@ -34,14 +34,14 @@ def best_threshold(Y_true, P, grid=np.linspace(0.05, 0.95, 19)) -> dict:
     return max(scores, key=lambda d: d["micro_f1"])
 
 
-def cluster_genomes(dist: np.ndarray, threshold: float) -> np.ndarray:
+def cluster_genomes(dist: np.ndarray, threshold: float, method: str = "average") -> np.ndarray:
     """Average-linkage clusters from a genome-genome distance matrix.
 
     On the real data, use 1 - ANI/100 (skani or fastANI) with threshold 0.05
     (95% ANI ~ species boundary). TNF distance works as a quick fallback.
     """
     d = squareform(dist, checks=False)
-    return fcluster(linkage(d, method="average"), t=threshold, criterion="distance")
+    return fcluster(linkage(d, method=method), t=threshold, criterion="distance")
 
 
 def grouped_split(groups: np.ndarray, frac=(0.7, 0.15, 0.15), seed: int = 0):

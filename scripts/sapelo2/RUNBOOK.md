@@ -135,10 +135,22 @@ Then tell Claude. It adds the numbers to `docs/results-log.md` from the committe
 
 ## If something goes wrong
 
+### One genome failed
+
+featurize exits with an error if even one genome fails, and SLURM then cancels evaluate (it
+only runs when everything before it succeeded). To recover:
+
+1. Read the reason: `cat /scratch/sp74395/glm/run/tnf_cache/failures.task*.tsv`.
+2. If it is fixable (for example a time limit), rerun the whole command,
+   `bash scripts/sapelo2/submit_all.sh`. Finished genomes are skipped, so only the failed ones
+   are redone. Always resubmit the whole command, never a single array index.
+3. If the genome is genuinely broken, tell Claude. Evaluating without it is a decision we record
+   (`n_failures` in the report), not something to do silently.
+
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `module: command not found` in a job log | job started without modules | tell Claude; add `source /etc/profile` to the sbatch file |
 | `skani not found` in the skani log | step 3 could not install it | rerun with `--no-ani`, ask Claude |
-| featurize or call_genes `FAILED` | one or more genomes failed | read `failures.task*.tsv` in that output folder |
-| evaluate never starts | it waits for featurize and skani to succeed | `sacct` shows which one failed |
+| featurize or call_genes `FAILED` | one or more genomes failed | read `failures.task*.tsv` in that output folder, then see "One genome failed" below |
+| evaluate shows `CANCELLED` | featurize or skani failed, so SLURM cancels evaluate | `sacct` shows which one failed |
 | `Disk quota exceeded` | scratch or group quota | `du -sh /scratch/sp74395/glm/*`, delete old `pilot/` |

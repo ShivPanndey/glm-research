@@ -54,6 +54,14 @@ def ani_distance(ids: list[str], pairs) -> np.ndarray:
     return D
 
 
+def cluster_ani(ids: list[str], pairs) -> np.ndarray:
+    """Single linkage: genomes joined by any chain of >= 95% ANI pairs share a cluster, so
+    relatives never straddle the split even when skani skipped the direct pair."""
+    if len(ids) < 2:
+        return np.ones(len(ids), int)
+    return cluster_genomes(ani_distance(ids, pairs), CUT, method="single")
+
+
 def nearest_ani(ids: list[str], pairs) -> dict[str, float]:
     best = dict.fromkeys(ids, 0.0)
     for a, b, ani in pairs:
@@ -72,7 +80,7 @@ def main() -> int:
 
     ids = sorted(norm_id(p) for p in Path(a.genomes).iterdir() if FASTA_RE.search(p.name))
     pairs = read_skani_sparse(Path(a.skani))
-    labels = cluster_genomes(ani_distance(ids, pairs), CUT) if len(ids) > 1 else np.ones(len(ids), int)
+    labels = cluster_ani(ids, pairs)
     near = nearest_ani(ids, pairs)
 
     out = Path(a.out)

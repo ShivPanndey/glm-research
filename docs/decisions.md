@@ -24,3 +24,11 @@ Moved from CLAUDE.md on 2026-11-05. Add new decisions here with a date.
   always be reported next to retrieval. k, T, and the decision threshold are tuned on
   validation only; test is touched once.
 - **KO vocabulary is built from training genomes only.**
+- **ANI clusters use single linkage** (2026-11-05). Genomes joined by any chain of pairs at 95%
+  ANI or more share a cluster. Average linkage could split a chain A~B~C when skani does not
+  report A~C, putting close relatives on both sides of the split. The spec said average linkage;
+  single linkage was chosen in the final review because it is the conservative choice for
+  leakage. `evaluate` refuses a clusters file that matches no genome id and records
+  `n_in_clusters_file`.
+- **Outputs are written atomically** (2026-11-05): temp file, then rename. A job killed mid-write
+  leaves no truncated `.npz` or `.faa` that a rerun would mistake for finished work.

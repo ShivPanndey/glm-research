@@ -71,3 +71,17 @@ def test_full_run_uses_50_tasks(env):
     calls = submit(env)
     assert "--array=0-49" in calls["call_genes"][1]
     assert not (env[0] / "scratch/pilot").exists()
+
+
+def test_evaluate_killed_if_dependency_fails(env):
+    calls = submit(env, "--pilot")
+    assert "--kill-on-invalid-dep=yes" in calls["evaluate"][1]
+
+
+def test_pilot_survives_many_long_names(env):
+    tmp, e = env
+    for i in range(2000):
+        (tmp / "data/genomes" / f"GCF_{i:09d}.1_ASM{i:07d}v1_genomic_long_name_padding.fa").touch()
+    for _ in range(15):
+        (tmp / "calls.log").unlink(missing_ok=True)
+        assert len(submit(env, "--pilot")) == 5

@@ -51,3 +51,10 @@ def test_cli_clusters_and_summary(tmp_path):
     s = json.loads((out / "ani_summary.json").read_text())
     assert s["n_genomes"] == 4 and s["n_clusters"] == 3 and s["n_nearest_below_80"] == 1
     assert s["cluster_size_counts"] == {"1": 2, "2": 1}
+
+
+def test_chained_relatives_share_a_cluster(tmp_path):
+    from ani_clusters import cluster_ani
+    pairs = [("a", "b", 96.0), ("b", "c", 96.0)]  # a~c not reported by skani
+    labels = cluster_ani(["a", "b", "c", "d"], pairs)
+    assert labels[0] == labels[1] == labels[2] != labels[3]

@@ -57,3 +57,20 @@ def test_evaluate_ani_clusters_label(dataset, tmp_path):
     report = evaluate(dataset, tmp_path / "out", "--clusters", str(clusters))
     assert report["meta"]["cluster_source"] == "ani95"
     assert set(report["per_seed"]) == {"0"}
+
+
+def test_clusters_file_must_match_ids(dataset, tmp_path):
+    bad = tmp_path / "bad.tsv"
+    bad.write_text("nope1\t1\nnope2\t2\n")
+    run = subprocess.run(RUN + ["evaluate", "--cache", str(dataset / "cache"), "--annotations",
+                                str(dataset / "ann"), "--clusters", str(bad), "--out", str(tmp_path / "o")],
+                         capture_output=True, text=True)
+    assert run.returncode != 0 and "clusters file" in (run.stdout + run.stderr)
+
+
+def test_meta_counts_ids_in_clusters_file(dataset, tmp_path):
+    ids = sorted(p.stem for p in (dataset / "cache").glob("*.npz"))
+    part = tmp_path / "part.tsv"
+    part.write_text("".join(f"{g}\t{i}\n" for i, g in enumerate(ids[:6])))
+    report = evaluate(dataset, tmp_path / "o", "--clusters", str(part))
+    assert report["meta"]["n_in_clusters_file"] == 6

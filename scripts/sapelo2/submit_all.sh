@@ -35,8 +35,9 @@ if [ "$PILOT" = 1 ]; then
   GENOMES="$RUN/genomes"
   mkdir -p "$GENOMES"
   find "$GENOMES" -maxdepth 1 -type l -delete
-  find "$DATA/genomes" -maxdepth 1 \( -name '*.fa' -o -name '*.fna' -o -name '*.fasta' \) -printf '%f\n' \
-    | sort | head -n 20 | while read -r f; do ln -s "$DATA/genomes/$f" "$GENOMES/$f"; done
+  # no `| head` here: under pipefail its early exit can SIGPIPE sort and kill the script
+  mapfile -t names < <(find "$DATA/genomes" -maxdepth 1 \( -name '*.fa' -o -name '*.fna' -o -name '*.fasta' \) -printf '%f\n' | sort)
+  for f in "${names[@]:0:20}"; do ln -s "$DATA/genomes/$f" "$GENOMES/$f"; done
 fi
 CACHE="$RUN/tnf_cache"
 ANI_OUT="$RUN/ani"
@@ -58,11 +59,11 @@ CC=$(sub --job-name=check_coords --dependency="afterany:$CG" --output="$LOGS/%x_
 FE=$(sub --job-name=featurize --array="$ARRAY" --output="$LOGS/%x_%A_%a.out" --export=ALL "$HERE/featurize.sbatch")
 if [ "$ANI" = 1 ]; then
   SK=$(sub --job-name=skani --output="$LOGS/%x_%j.out" --export=ALL "$HERE/skani.sbatch")
-  EV=$(sub --job-name=evaluate --dependency="afterok:$FE:$SK" --output="$LOGS/%x_%j.out" \
+  EV=$(sub --job-name=evaluate --dependency="afterok:$FE:$SK" --kill-on-invalid-dep=yes --output="$LOGS/%x_%j.out" \
            --export="ALL,CLUSTERS=$ANI_OUT/clusters_ani95.tsv" "$HERE/evaluate.sbatch")
   IDS="$CG $CC $FE $SK $EV"
 else
-  EV=$(sub --job-name=evaluate --dependency="afterok:$FE" --output="$LOGS/%x_%j.out" --export=ALL "$HERE/evaluate.sbatch")
+  EV=$(sub --job-name=evaluate --dependency="afterok:$FE" --kill-on-invalid-dep=yes --output="$LOGS/%x_%j.out" --export=ALL "$HERE/evaluate.sbatch")
   IDS="$CG $CC $FE $EV"
 fi
 echo "$IDS" > "$RUN/job_ids.txt"

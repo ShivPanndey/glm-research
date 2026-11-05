@@ -23,7 +23,7 @@ import pyrodigal
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tnf import read_fasta  # noqa: E402
-from jobutil import FailureLog, my_shard, task_count, task_id  # noqa: E402
+from jobutil import FailureLog, atomic_write, my_shard, task_count, task_id  # noqa: E402
 from run_baseline import FASTA_RE, norm_id  # noqa: E402
 
 
@@ -78,11 +78,14 @@ def write_genes(fasta: Path, dest: Path) -> set[str]:
     gf = pyrodigal.GeneFinder(meta=False)
     gf.train(*[s.encode() for _, s in contigs])
     ids = set()
-    with open(dest, "w") as fh:
+
+    def write(fh):
         for name, seq in contigs:
             genes = gf.find_genes(seq.encode())
             genes.write_translations(fh, sequence_id=name)
             ids.update(f"{name}_{i}" for i in range(1, len(genes) + 1))
+
+    atomic_write(dest, write)
     return ids
 
 if __name__ == "__main__":

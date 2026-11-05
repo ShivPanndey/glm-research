@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from jobutil import FailureLog, my_shard, task_count, task_id  # noqa: E402
+from jobutil import FailureLog, atomic_write, my_shard, task_count, task_id  # noqa: E402
 from tnf import (KOVocab, TNFIndex, best_threshold, clr, cluster_genomes, featurize_genome,  # noqa: E402
                  genome_ko_set, grouped_split, multilabel_metrics, parse_emapper,
                  parse_prodigal_faa, transfer_genome_level, transfer_window_level,
@@ -58,12 +58,10 @@ def cmd_featurize(a):
                 total, tab = featurize_genome(f, a.window, a.stride, genome_id=gid)
                 if total.sum() == 0:
                     raise ValueError("no sequence")
-                if tab is None:
-                    np.savez_compressed(dest, total=total)
-                else:
-                    np.savez_compressed(dest, total=total, contigs=tab.contigs.astype(str),
-                                        starts=tab.starts, ends=tab.ends,
-                                        counts=tab.counts.astype(np.uint16))
+                arrays = {"total": total} if tab is None else {
+                    "total": total, "contigs": tab.contigs.astype(str), "starts": tab.starts,
+                    "ends": tab.ends, "counts": tab.counts.astype(np.uint16)}
+                atomic_write(dest, lambda fh: np.savez_compressed(fh, **arrays), mode="wb")
             except Exception as e:  # one bad genome must not stop the other 999
                 log.record(gid, f"{type(e).__name__}: {e}")
     print(f"task {task_id()}/{task_count()}: featurized {len(mine)} genomes -> {out}"
@@ -190,6 +188,13 @@ def cmd_evaluate(a):
     # depends on the feature being evaluated)
     if a.clusters:
         cmap = dict(line.split()[:2] for line in open(a.clusters) if line.strip())
+        n_in_clusters = sum(g in cmap for g in ids)
+        if n_in_clusters == 0:
+            sys.exit(f"clusters file {a.clusters} matches none of the {len(ids)} genome ids; "
+                     f"first ids here: {ids[:3]}")
+        if n_in_clusters < len(ids):
+            print(f"WARNING: clusters file covers {n_in_clusters}/{len(ids)} genomes; "
+                  "the rest become singleton clusters")
         groups = np.array([cmap.get(g, g) for g in ids])
         cluster_source = "ani95"
     else:
@@ -198,6 +203,7 @@ def cmd_evaluate(a):
         Z /= np.linalg.norm(Z, axis=1, keepdims=True)
         groups = cluster_genomes(np.clip(1 - Z @ Z.T, 0, None), a.tnf_cluster_threshold)
         cluster_source = "tnf_fallback (circular)"
+        n_in_clusters = None
 
     n_failures = sum(len(p.read_text().splitlines()) for p in Path(a.cache).glob("failures.task*.tsv"))
     per_seed = {str(s): evaluate_split(s, G, ko_sets, ids, groups, labels, cache, a) for s in seeds}
@@ -210,6 +216,7 @@ def cmd_evaluate(a):
     report = {
         "meta": {"git_commit": git_commit(), "argv": sys.argv, "cluster_source": cluster_source,
                  "n_matched": len(ids), "n_unmatched": len(missing), "n_failures": n_failures,
+                 "n_in_clusters_file": n_in_clusters,
                  "seeds": seeds},
         "per_seed": per_seed,
         "summary": summary,

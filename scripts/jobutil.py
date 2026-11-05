@@ -26,6 +26,20 @@ def failures_path(out: Path) -> Path:
     return Path(out) / f"failures.task{task_id()}.tsv"
 
 
+def atomic_write(dest: Path, write, mode: str = "w") -> None:
+    """Call write(fh) on a temp file, then rename it to dest. A crash or kill mid-write leaves
+    no dest behind, so a rerun redoes that genome instead of trusting a truncated file."""
+    dest = Path(dest)
+    tmp = dest.with_name(dest.name + ".tmp")
+    try:
+        with open(tmp, mode) as fh:
+            write(fh)
+        os.replace(tmp, dest)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 class FailureLog:
     """Context manager: `with FailureLog(out) as log: log.record(gid, reason)`."""
 
