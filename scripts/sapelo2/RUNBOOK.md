@@ -66,7 +66,6 @@ ls family_1000_dataset_final_v2/genomes | wc -l   # expect: 1000
 ssh sp74395@sapelo2.gacrc.uga.edu
 git clone https://github.com/ShivPanndey/glm-research.git ~/glm-research
 cd ~/glm-research
-git checkout claude/practical-pasteur-dqlixc   # until this branch is merged
 module spider Python                            # note a full module name, e.g. Python/3.x.y-...
 nano scripts/sapelo2/config.sh                  # set GROUP_DIR and PY_MODULE, save
 ```
