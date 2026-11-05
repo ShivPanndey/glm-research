@@ -56,7 +56,7 @@ flowchart LR
 - Produces: `make check` = `lint test smoke style shellcheck` targets, in that order.
 
 - [ ] **Step 1: Write failing tests** in `tests/test_style.py`:
-  `test_flags_em_dash(tmp_path)`: file with `"a — b\n"` on line 2 gives `[(str(path), 2)]`.
+  `test_flags_em_dash(tmp_path)`: file with `"a \u2014 b\n"` on line 2 gives `[(str(path), 2)]`.
   `test_ignores_binary(tmp_path)`: file with bytes `b"\xff\xfe\x14\x20"` gives `[]`.
   `test_clean_file(tmp_path)`: `"a, b\n"` gives `[]`.
 - [ ] **Step 2: Run** `python -m pytest -q tests/test_style.py`. Expected: FAIL, module not found.
@@ -93,7 +93,7 @@ flowchart LR
 - Consumes: `find_em_dashes` from Task 1.
 - Produces: `guard_commit.py` reads hook JSON on stdin (`tool_input.command`). If the command does not contain `git commit`, exit 0. Otherwise block (print reason to stderr, exit 2) when: the command text contains an em dash; any staged path (`git diff --cached --name-only`) matches the lab-data patterns from Global Constraints outside `data/genomes/` and `tests/`; any staged text file contains an em dash. Pure helper `blocked_paths(paths: list[str]) -> list[str]`.
 
-- [ ] **Step 1: Write failing tests**: `blocked_paths(["genomes/x.fa", "data/genomes/y.fna.gz", "tests/fixtures/a.faa", "eggnog/x/x.emapper.annotations", "cache/x.npz", "README.md"])` returns `["genomes/x.fa", "eggnog/x/x.emapper.annotations", "cache/x.npz"]`. And running the script with stdin `{"tool_input": {"command": "git commit -m \"a — b\""}}` exits 2; with `{"tool_input": {"command": "ls"}}` exits 0.
+- [ ] **Step 1: Write failing tests**: `blocked_paths(["genomes/x.fa", "data/genomes/y.fna.gz", "tests/fixtures/a.faa", "eggnog/x/x.emapper.annotations", "cache/x.npz", "README.md"])` returns `["genomes/x.fa", "eggnog/x/x.emapper.annotations", "cache/x.npz"]`. And running the script with stdin `{"tool_input": {"command": "git commit -m \"a \u2014 b\""}}` exits 2; with `{"tool_input": {"command": "ls"}}` exits 0.
 - [ ] **Step 2: Run** them. Expected: FAIL.
 - [ ] **Step 3: Implement** `guard_commit.py`.
 - [ ] **Step 4: Run** them. Expected: PASS.
