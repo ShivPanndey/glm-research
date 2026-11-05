@@ -29,7 +29,7 @@ tnf/labels.py       eggNOG-mapper KEGG_ko parser, Prodigal .faa/.gff coordinates
 tnf/retrieval.py    FAISS index, genome-level and window-level label transfer
 tnf/evaluate.py     multi-label metrics, genome clustering, leakage-safe splits
 scripts/run_baseline.py        featurize (SLURM-array aware) and evaluate
-scripts/featurize_array.sbatch Sapelo2 array job template
+scripts/sapelo2/               Sapelo2 workflow: config, setup, preflight, jobs, RUNBOOK.md
 experiments/window_taxonomy.py preliminary experiment, figures 1 to 4
 experiments/locus_recovery.py  preliminary experiment, figure 5
 tests/                         unit tests and smoke-test data generator
@@ -37,18 +37,17 @@ tests/                         unit tests and smoke-test data generator
 
 ## Running on the lab dataset
 
-```bash
-pip install -r requirements.txt
-python -m pytest -q tests
+On UGA's Sapelo2 cluster, follow `scripts/sapelo2/RUNBOOK.md`. In short:
 
-sbatch scripts/featurize_array.sbatch            # step 1, parallel
-python scripts/run_baseline.py evaluate \
-    --cache /scratch/$USER/glm/tnf_cache_w5k \
-    --annotations $DATA/annotations \
-    --faa $DATA/prodigal \                       # optional; enables window traversal
-    --clusters clusters_ani95.tsv \              # optional; else TNF-distance clusters
-    --out results/
+```bash
+bash scripts/sapelo2/setup_env.sh                       # once: venv, requirements, skani
+source scripts/sapelo2/config.sh && python scripts/sapelo2/preflight.py
+bash scripts/sapelo2/submit_all.sh --pilot              # 20 genomes; then without --pilot
+bash scripts/sapelo2/collect_results.sh /scratch/$USER/glm/pilot
 ```
+
+`submit_all.sh` chains gene re-calling, the qend check, featurization, skani ANI clusters,
+and `evaluate --seeds 0,1,2`. Run `make check` before committing.
 
 Prefer ANI-based clusters (for example skani at 95% ANI) over the TNF fallback,
 because TNF clustering would make the split partly depend on the feature being

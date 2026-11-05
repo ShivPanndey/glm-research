@@ -97,9 +97,12 @@ at `eggnog/`. Checked on the 20-genome sample: "0 unmatched".
 
 ## Compute
 
-UGA GACRC **Sapelo2** (SLURM). Partition `batch`. Use `/scratch/$USER/` for data. A
-template array job is in `scripts/featurize_array.sbatch` (module name and env path are
-placeholders: check `module spider Python`).
+UGA GACRC **Sapelo2** (SLURM). Partition `batch`. Step-by-step guide:
+`scripts/sapelo2/RUNBOOK.md`. Master data and re-called proteins live in group storage
+(`GROUP_DIR`, under `/work` or `/project`); caches and logs in `/scratch/$USER/glm` (disposable).
+Every path is in `scripts/sapelo2/config.sh`. This cloud session cannot log in to Sapelo2 (Duo),
+so the loop is: Claude pushes code, Shiv runs `submit_all.sh`, `collect_results.sh` brings small
+JSON back through git.
 
 ## Repo layout
 
@@ -112,12 +115,21 @@ tnf/retrieval.py      TNFIndex (CLR -> z-score -> L2 -> FAISS IndexFlatIP),
 tnf/evaluate.py       micro/macro P/R/F1, threshold tuning, genome clustering, grouped splits
 scripts/run_baseline.py         `featurize` (SLURM-array aware) and `evaluate` subcommands
 scripts/call_genes.py           re-creates Prodigal .faa (pyrodigal, single mode), checks ids vs emapper
-scripts/featurize_array.sbatch  Sapelo2 array template
+scripts/check_coords.py         re-called protein lengths vs .seed_orthologs qend (report only)
+scripts/ani_clusters.py         skani edges -> clusters_ani95.tsv + ani_summary.json
+scripts/jobutil.py              array sharding and per-task failures.task<ID>.tsv
+scripts/check_style.py          em-dash gate used by make check and the commit hook
+scripts/sapelo2/                config.sh, setup_env.sh, preflight.py, *.sbatch, submit_all.sh,
+                                collect_results.sh, RUNBOOK.md
 scripts/peek_dataset.py         inventory + sample extraction from the lab tarball
 experiments/window_taxonomy.py  public-genome sanity check, figs 1 to 4
 experiments/locus_recovery.py   public-genome synteny test, fig 5
 tests/test_tnf.py               unit tests (run: python -m pytest -q tests)
 tests/make_smoke_data.py        builds a fake dataset in lab formats (synthetic KOs) for smoke tests
+tests/run_smoke.py              smoke pipeline in a self-cleaning temp dir (make smoke)
+Makefile                        make check = lint + tests + smoke + style + shell syntax
+AGENTS.md, docs/                repo map, decisions, results log, harness log, specs, plans
+.claude/                        commit guard hook, SessionStart install hook, reviewer agent
 data/genomes/                   6 public genomes used only for sanity checks
 results/                        figures and JSON from the experiments
 ```
@@ -155,9 +167,12 @@ is the reference, second half the queries.
    Note: the sample is the 20 smallest genomes (0.42 to 0.64 MB), not representative.
 2. Read the logs; confirm with the advisors what "family_1000" means. Verify re-called
    coordinates against `.seed_orthologs` qend.
-3. On Sapelo2: `call_genes.py` and `featurize` as array jobs over all 1,000 genomes, then
-   `evaluate`: first real KEGG_ko numbers, TNF genome-kNN versus frequency prior.
-4. Compute ANI clusters (skani or fastANI) for proper splits; rerun.
+3. Code ready (spec `docs/superpowers/specs/2026-11-03-tnf-first-score-design.md`): on Sapelo2,
+   follow `scripts/sapelo2/RUNBOOK.md`: preflight, `submit_all.sh --pilot`, then the full run.
+   Produces the first real KEGG_ko numbers (TNF genome-kNN versus frequency prior, seeds 0, 1, 2),
+   the qend check, and ANI clusters. Log numbers in `docs/results-log.md`.
+4. ANI clusters (skani, 95%): moved into step 3. `ani_summary.json` also answers the
+   "family_1000" question (how many genomes have any relative above 80% ANI).
 5. Window-level traversal; sweep window size (1, 2, 5,
    10 kb) and k; isotonic calibration of window probabilities.
 6. OOD plot: per-genome F1 versus nearest-training-genome cosine (data already written to
@@ -170,12 +185,14 @@ Original 15-week plan (from Sept 24): weeks 1 to 2 data and labels; 3 to 4 featu
 (done); 5 to 6 genome-level baseline (code done, needs lab data); 7 to 9 window traversal
 and calibration; week 10 Thanksgiving buffer; 11 to 12 functional-category and OOD
 evaluation (light, finals); 13 to 15 hybrid prototype and results summary for the advisors.
+Update (CURO abstract, Nov 1 2026): training and comparing the windowed and genome-level models
+on Sapelo2 moves to spring 2027.
 
 ## Commands
 
 ```bash
 pip install -r requirements.txt
-python -m pytest -q tests
+make check                       # lint, tests, smoke run, style, shell syntax
 python experiments/window_taxonomy.py && python experiments/locus_recovery.py
 
 # smoke test of the full pipeline (synthetic labels, scores meaningless)
@@ -183,9 +200,9 @@ python tests/make_smoke_data.py /tmp/smoke
 python scripts/run_baseline.py featurize --genomes /tmp/smoke/genomes --out /tmp/smoke/cache --window 5000 --stride 2500
 python scripts/run_baseline.py evaluate --cache /tmp/smoke/cache --annotations /tmp/smoke/ann --faa /tmp/smoke/faa --out /tmp/smoke/results
 
-# real data on Sapelo2 ($DATA = family_1000_dataset_final_v2)
-python scripts/call_genes.py --genomes $DATA/genomes --annotations $DATA/eggnog --out $DATA/prodigal
-sbatch scripts/featurize_array.sbatch
-python scripts/run_baseline.py evaluate --cache /scratch/$USER/glm/tnf_cache_w5k \
-  --annotations $DATA/eggnog --faa $DATA/prodigal --clusters clusters_ani95.tsv --out results/
+# real data on Sapelo2: see scripts/sapelo2/RUNBOOK.md
+bash scripts/sapelo2/setup_env.sh                  # once
+source scripts/sapelo2/config.sh && python scripts/sapelo2/preflight.py
+bash scripts/sapelo2/submit_all.sh --pilot         # 20 genomes, then without --pilot
+bash scripts/sapelo2/collect_results.sh /scratch/$USER/glm/pilot
 ```
