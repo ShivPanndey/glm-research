@@ -14,7 +14,7 @@ test:
 	$(PY) -m pytest -q tests
 
 smoke:
-	$(PY) tests/run_smoke.py
+	$(PY) tests/run_smoke.py --seeds 0
 
 style:
 	$(PY) scripts/check_style.py

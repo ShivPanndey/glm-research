@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -93,36 +94,16 @@ def per_genome_f1(Y, P, t):
     return 2 * prec * rec / np.maximum(prec + rec, 1e-9)
 
 
-def cmd_evaluate(a):
-    cache = {p.stem: p for p in Path(a.cache).glob("*.npz")}
-    labels = load_labels(Path(a.annotations))
-    ids = sorted(set(cache) & set(labels))
-    missing = sorted(set(cache) ^ set(labels))
-    print(f"{len(ids)} genomes with both TNF and labels; {len(missing)} unmatched")
-    if len(ids) < 10:
-        sys.exit("need at least ~10 matched genomes for a train/val/test split")
-
-    G = np.vstack([np.load(cache[g])["total"] for g in ids])
-    ko_sets = [genome_ko_set(labels[g]) for g in ids]
-
-    # clusters: ANI-based file if given, else TNF-distance fallback
-    if a.clusters:
-        cmap = dict(l.split()[:2] for l in open(a.clusters) if l.strip())
-        groups = np.array([cmap.get(g, g) for g in ids])
-    else:
-        Z = clr(G)
-        Z = (Z - Z.mean(0)) / (Z.std(0) + 1e-6)
-        Z /= np.linalg.norm(Z, axis=1, keepdims=True)
-        groups = cluster_genomes(np.clip(1 - Z @ Z.T, 0, None), a.tnf_cluster_threshold)
-    tr, va, te = grouped_split(groups, seed=a.seed)
+def evaluate_split(seed, G, ko_sets, ids, groups, labels, cache, a) -> dict:
+    """One split seed: split, train-only vocabulary, tuning on val, one scoring of test."""
+    tr, va, te = grouped_split(groups, seed=seed)
     vocab = KOVocab([ko_sets[i] for i in tr])  # vocabulary from train only
     Y = vocab.to_matrix(ko_sets)
-    print(f"split: train={len(tr)} val={len(va)} test={len(te)} genomes, "
+    print(f"seed {seed}: train={len(tr)} val={len(va)} test={len(te)} genomes, "
           f"{len(np.unique(groups))} clusters, {len(vocab)} KOs")
 
     index = TNFIndex().build(G[tr])
-    report = {"n_genomes": len(ids), "n_kos": len(vocab),
-              "split_sizes": [len(tr), len(va), len(te)], "methods": {}}
+    report = {"n_kos": len(vocab), "split_sizes": [len(tr), len(va), len(te)], "methods": {}}
 
     # ---- genome-level retrieval: tune k and temperature on validation
     best = None
@@ -152,7 +133,7 @@ def cmd_evaluate(a):
 
     # ---- window-level traversal (needs Prodigal coordinates)
     if a.faa:
-        faa = {norm_id(p): p for p in Path(a.faa).rglob("*.faa*")}
+        faa = {norm_id(p): p for p in Path(a.faa).rglob("*.faa")}
         win_ids = [i for i in range(len(ids)) if ids[i] in faa and "counts" in np.load(cache[ids[i]])]
         if win_ids:
             W = {}
@@ -177,14 +158,71 @@ def cmd_evaluate(a):
             report["methods"]["tnf_window_traversal"] = {
                 "k": a.window_k, "pool": "max", "val": m_v,
                 "test": multilabel_metrics(Y[rt], Pt, m_v["threshold"])}
+    return report
+
+
+def git_commit() -> str:
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent,
+                             capture_output=True, text=True, check=True)
+        return out.stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+
+
+SUMMARY_METRICS = ("micro_f1", "macro_f1", "micro_precision", "micro_recall")
+
+
+def cmd_evaluate(a):
+    seeds = [int(s) for s in str(a.seeds).split(",") if s.strip()]
+    cache = {p.stem: p for p in Path(a.cache).glob("*.npz")}
+    labels = load_labels(Path(a.annotations))
+    ids = sorted(set(cache) & set(labels))
+    missing = sorted(set(cache) ^ set(labels))
+    print(f"{len(ids)} genomes with both TNF and labels; {len(missing)} unmatched")
+    if len(ids) < 10:
+        sys.exit("need at least ~10 matched genomes for a train/val/test split")
+
+    G = np.vstack([np.load(cache[g])["total"] for g in ids])
+    ko_sets = [genome_ko_set(labels[g]) for g in ids]
+
+    # clusters: ANI-based file if given, else TNF-distance fallback (circular: the split then
+    # depends on the feature being evaluated)
+    if a.clusters:
+        cmap = dict(line.split()[:2] for line in open(a.clusters) if line.strip())
+        groups = np.array([cmap.get(g, g) for g in ids])
+        cluster_source = "ani95"
+    else:
+        Z = clr(G)
+        Z = (Z - Z.mean(0)) / (Z.std(0) + 1e-6)
+        Z /= np.linalg.norm(Z, axis=1, keepdims=True)
+        groups = cluster_genomes(np.clip(1 - Z @ Z.T, 0, None), a.tnf_cluster_threshold)
+        cluster_source = "tnf_fallback (circular)"
+
+    n_failures = sum(len(p.read_text().splitlines()) for p in Path(a.cache).glob("failures.task*.tsv"))
+    per_seed = {str(s): evaluate_split(s, G, ko_sets, ids, groups, labels, cache, a) for s in seeds}
+    summary = {}
+    for method in per_seed[str(seeds[0])]["methods"]:
+        summary[method] = {}
+        for metric in SUMMARY_METRICS:
+            v = np.array([r["methods"][method]["test"][metric] for r in per_seed.values()])
+            summary[method][metric] = {"mean": float(v.mean()), "min": float(v.min()), "max": float(v.max())}
+    report = {
+        "meta": {"git_commit": git_commit(), "argv": sys.argv, "cluster_source": cluster_source,
+                 "n_matched": len(ids), "n_unmatched": len(missing), "n_failures": n_failures,
+                 "seeds": seeds},
+        "per_seed": per_seed,
+        "summary": summary,
+    }
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "baseline_report.json").write_text(json.dumps(report, indent=2))
-    for name, r in report["methods"].items():
-        t = r["test"]
-        print(f"{name:24s} test micro-F1={t['micro_f1']:.3f}  macro-F1={t['macro_f1']:.3f}  "
-              f"P={t['micro_precision']:.3f} R={t['micro_recall']:.3f}")
+    print(f"split: {cluster_source}; seeds {seeds}; test scores as mean [min, max]")
+    for name, s in summary.items():
+        mi, ma = s["micro_f1"], s["macro_f1"]
+        print(f"{name:24s} micro-F1={mi['mean']:.3f} [{mi['min']:.3f}, {mi['max']:.3f}]  "
+              f"macro-F1={ma['mean']:.3f} [{ma['min']:.3f}, {ma['max']:.3f}]")
 
 
 def main():
@@ -203,7 +241,7 @@ def main():
     e.add_argument("--clusters", default=None, help="TSV: genome_id<TAB>cluster_id (e.g. from skani at 95% ANI)")
     e.add_argument("--tnf-cluster-threshold", type=float, default=0.1)
     e.add_argument("--window-k", type=int, default=10)
-    e.add_argument("--seed", type=int, default=0)
+    e.add_argument("--seeds", default="0", help="comma-separated split seeds, e.g. 0,1,2")
     e.add_argument("--out", required=True)
     a = ap.parse_args()
     {"featurize": cmd_featurize, "evaluate": cmd_evaluate}[a.cmd](a)
