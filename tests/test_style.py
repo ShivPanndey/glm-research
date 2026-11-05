@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from check_style import find_em_dashes  # noqa: E402
 
-EM = "—"
+EM = chr(0x2014)
 
 
 def test_flags_em_dash(tmp_path):
